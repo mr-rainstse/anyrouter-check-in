@@ -415,23 +415,17 @@ async def main():
 			need_notify = True  # 异常也需要通知
 			notification_content.append(f'[FAIL] {account_name} exception: {str(e)[:50]}...')
 
-	# 检查余额变化
-	current_balance_hash = generate_balance_hash(current_balances) if current_balances else None
-	if current_balance_hash:
-		if last_balance_hash is None:
-			# 首次运行
-			balance_changed = True
-			need_notify = True
-			print('[NOTIFY] First run detected, will send notification with current balances')
-		elif current_balance_hash != last_balance_hash:
-			# 余额有变化
-			balance_changed = True
-			need_notify = True
-			print('[NOTIFY] Balance changes detected, will send notification')
-		else:
-			print('[INFO] No balance changes detected')
+	# 检查是否有实际的签到奖励 (避免 GitHub Actions 临时环境导致每次都发送全量通知)
+	for i, account in enumerate(accounts):
+		account_key = f'account_{i + 1}'
+		if account_key in account_check_in_details:
+			detail = account_check_in_details[account_key]
+			if detail.get('check_in_reward', 0) > 0:
+				balance_changed = True
+				need_notify = True
+				print(f"[NOTIFY] Check-in reward detected for {detail['name']}")
 
-	# 为有余额变化的情况添加所有成功账号到通知内容
+	# 如果有奖励变化，添加对应的账号详情到通知内容
 	if balance_changed:
 		for i, account in enumerate(accounts):
 			account_key = f'account_{i + 1}'
@@ -445,10 +439,6 @@ async def main():
 				# 检查是否已经在通知内容中（避免重复）
 				if not any(account_name in item for item in notification_content):
 					notification_content.append(account_result)
-
-	# 保存当前余额hash
-	if current_balance_hash:
-		save_balance_hash(current_balance_hash)
 
 	if need_notify and notification_content:
 		# 构建通知内容
